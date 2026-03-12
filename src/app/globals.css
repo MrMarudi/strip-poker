@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-felt: #1a472a;
+  --color-felt-dark: #0a1f0a;
+  --color-gold: #d4af37;
+  --color-gold-light: #f0d060;
+  --color-card-back: #8b0000;
+  --color-dark-accent: #1a1a2e;
+  --font-playfair: "Playfair Display", serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-felt-dark);
+    color: white;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .font-playfair {
+    font-family: var(--font-playfair);
+  }
+
+  .text-gold {
+    color: var(--color-gold);
+  }
+
+  .bg-felt {
+    background-color: var(--color-felt);
+  }
+
+  .bg-felt-dark {
+    background-color: var(--color-felt-dark);
+  }
+
+  .gold-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-gold) 0%,
+      var(--color-gold-light) 25%,
+      var(--color-gold) 50%,
+      var(--color-gold-light) 75%,
+      var(--color-gold) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% center;
+    }
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.4), 0 0 40px rgba(212, 175, 55, 0.2);
+  }
+
+  .glow-gold-strong {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.6), 0 0 60px rgba(212, 175, 55, 0.3), 0 0 100px rgba(212, 175, 55, 0.1);
+  }
+}
