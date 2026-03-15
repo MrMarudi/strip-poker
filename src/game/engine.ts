@@ -144,8 +144,8 @@ export function startNewRound(state: GameState): GameState {
     }
   }
 
-  // Post blinds
-  const sbIdx = nextActivePlayerIndex(s.players, s.dealerIndex);
+  // Post blinds (heads-up: dealer is small blind)
+  const sbIdx = s.dealerIndex;
   const bbIdx = nextActivePlayerIndex(s.players, sbIdx);
 
   const sbPlayer = s.players[sbIdx];

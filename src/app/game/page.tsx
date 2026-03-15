@@ -12,7 +12,6 @@ import {
   startNewRound,
   handlePlayerAction,
   advancePhase,
-  determineWinner,
 } from "@/game/engine";
 import { getNPCAction } from "@/game/npc";
 import type { GameState, PlayerAction } from "@/game/types";
@@ -24,12 +23,14 @@ export default function GamePage() {
   const [showResult, setShowResult] = useState(false);
   const [animatingPhase, setAnimatingPhase] = useState(false);
   const npcTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const actedThisStreetRef = useRef<Set<number>>(new Set());
 
   // Initialize game
   useEffect(() => {
     const state = createInitialState(settings.playerName);
     const started = startNewRound(state);
     setGameState(started);
+    actedThisStreetRef.current = new Set();
   }, [settings.playerName]);
 
   // Cleanup timer on unmount
@@ -51,93 +52,139 @@ export default function GamePage() {
   const minRaise = gameState ? gameState.bigBlind : 10;
   const maxRaise = player ? player.chips : 100;
 
+  // Check if betting round is complete
+  const shouldAdvancePhase = useCallback((state: GameState, acted: Set<number>): boolean => {
+    const nonFolded = state.players.filter(p => !p.folded);
+    if (nonFolded.length <= 1) return false;
+
+    // All non-folded players with chips must have equal bets (or be all-in)
+    const highestBet = Math.max(...nonFolded.map(p => p.currentBet));
+    for (const p of nonFolded) {
+      if (p.chips > 0 && p.currentBet < highestBet) return false;
+    }
+
+    // All non-folded players who can still act must have acted this street
+    const mustAct = state.players
+      .map((p, i) => ({ player: p, index: i }))
+      .filter(({ player: p }) => !p.folded && p.chips > 0);
+
+    return mustAct.every(({ index }) => acted.has(index));
+  }, []);
+
   // Process NPC turn
   const processNPCTurn = useCallback((state: GameState) => {
     if (state.roundOver || state.phase === "showdown" || state.phase === "idle") return;
     if (state.currentPlayerIndex !== 1) return;
 
-    npcTimerRef.current = setTimeout(() => {
-      const { action, amount } = getNPCAction(state, 1, settings.difficulty);
-      let newState = handlePlayerAction(state, action, amount);
+    const timer = setTimeout(() => {
+      npcTimerRef.current = null;
 
-      // Check if round should advance
-      if (shouldAdvancePhase(newState)) {
+      const actingIndex = 1;
+      const prevHighest = Math.max(...state.players.map(p => p.currentBet));
+      const { action, amount } = getNPCAction(state, 1, settings.difficulty);
+      const newState = handlePlayerAction(state, action, amount);
+
+      // Update acted tracking
+      const acted = actedThisStreetRef.current;
+      const actingPlayer = newState.players[actingIndex];
+      const isRaise = action === "raise" ||
+        (action === "all-in" && actingPlayer.currentBet > prevHighest);
+      if (isRaise) {
+        acted.clear();
+      }
+      acted.add(actingIndex);
+
+      // 1. Check if round ended (someone folded or engine detected end)
+      if (newState.roundOver) {
+        setGameState(newState);
+        setShowResult(true);
+        return;
+      }
+
+      // 2. Check if betting round is complete → advance phase
+      if (shouldAdvancePhase(newState, acted)) {
+        actedThisStreetRef.current = new Set();
         setAnimatingPhase(true);
         setTimeout(() => {
-          if (newState.phase === "river") {
-            newState = determineWinner(advancePhase(newState));
-            setGameState(newState);
-            setShowResult(true);
-          } else {
-            newState = advancePhase(newState);
-            setGameState(newState);
-            // Check if NPC needs to act again
-            if (newState.currentPlayerIndex === 1) {
-              processNPCTurn(newState);
-            }
-          }
+          const advanced = advancePhase(newState);
+          setGameState(advanced);
           setAnimatingPhase(false);
+          if (advanced.roundOver || advanced.phase === "showdown") {
+            setShowResult(true);
+          }
+          // useEffect will trigger NPC if needed after render
         }, 600);
       } else {
+        // 3. Not complete, let next player act
         setGameState(newState);
+        // useEffect will trigger NPC if it's still their turn (shouldn't be)
       }
     }, 800 + Math.random() * 700);
-  }, [settings.difficulty]);
 
-  const shouldAdvancePhase = (state: GameState): boolean => {
-    const activePlayers = state.players.filter(p => !p.folded);
-    if (activePlayers.length <= 1) return false;
-    const allEqualBets = activePlayers.every(p => p.currentBet === activePlayers[0].currentBet);
-    // Both players have acted and bets are equal
-    const bothActed = state.currentPlayerIndex === state.dealerIndex;
-    return allEqualBets && bothActed;
-  };
+    npcTimerRef.current = timer;
+  }, [settings.difficulty, shouldAdvancePhase]);
+
+  // Auto-trigger NPC turn when it becomes their turn
+  useEffect(() => {
+    if (!gameState || animatingPhase || gameState.roundOver) return;
+    if (gameState.phase === "showdown" || gameState.phase === "idle") return;
+    if (gameState.currentPlayerIndex !== 1) return;
+    if (npcTimerRef.current) return;
+
+    processNPCTurn(gameState);
+  }, [gameState, animatingPhase, processNPCTurn]);
 
   const handleAction = (action: PlayerAction, amount?: number) => {
     if (!gameState || !canAct) return;
 
-    let newState = handlePlayerAction(gameState, action, amount);
+    const actingIndex = gameState.currentPlayerIndex;
+    const prevHighest = Math.max(...gameState.players.map(p => p.currentBet));
+    const newState = handlePlayerAction(gameState, action, amount);
 
-    // Check if player folded
-    if (action === "fold") {
-      newState = { ...newState, roundOver: true, winner: npc!.name, winnerHand: "Opponent folded" };
+    // Update acted tracking
+    const acted = actedThisStreetRef.current;
+    const actingPlayer = newState.players[actingIndex];
+    const isRaise = action === "raise" ||
+      (action === "all-in" && actingPlayer.currentBet > prevHighest);
+    if (isRaise) {
+      acted.clear();
+    }
+    acted.add(actingIndex);
+
+    // 1. Check if round ended (fold or engine detected end)
+    if (newState.roundOver) {
       setGameState(newState);
       setShowResult(true);
       return;
     }
 
-    // Check if we should advance phase
-    if (shouldAdvancePhase(newState)) {
+    // 2. Check if betting round is complete → advance phase
+    if (shouldAdvancePhase(newState, acted)) {
+      actedThisStreetRef.current = new Set();
       setAnimatingPhase(true);
       setTimeout(() => {
-        if (newState.phase === "river") {
-          newState = determineWinner(advancePhase(newState));
-          setGameState(newState);
-          setShowResult(true);
-        } else {
-          newState = advancePhase(newState);
-          setGameState(newState);
-          // NPC may need to act
-          if (newState.currentPlayerIndex === 1) {
-            processNPCTurn(newState);
-          }
-        }
+        const advanced = advancePhase(newState);
+        setGameState(advanced);
         setAnimatingPhase(false);
+        if (advanced.roundOver || advanced.phase === "showdown") {
+          setShowResult(true);
+        }
+        // useEffect will trigger NPC if needed after render
       }, 600);
     } else {
+      // 3. Not complete, let next player act
       setGameState(newState);
-      // NPC turn
-      if (newState.currentPlayerIndex === 1 && !newState.roundOver) {
-        processNPCTurn(newState);
-      }
+      // useEffect will trigger NPC if it's their turn
     }
   };
 
   const handleNewRound = () => {
     if (!gameState) return;
     setShowResult(false);
+    actedThisStreetRef.current = new Set();
     const newState = startNewRound(gameState);
     setGameState(newState);
+    // useEffect will trigger NPC if it's their turn
   };
 
   if (!gameState || !player || !npc) {
@@ -207,7 +254,7 @@ export default function GamePage() {
               <AnimatedCard
                 key={`npc-${i}`}
                 card={card}
-                faceUp={gameState.phase === "showdown" || showResult}
+                faceUp={gameState.phase === "showdown" && !gameState.players.some(p => p.folded)}
                 cardBackStyle={settings.cardBackStyle}
                 width={70}
                 height={98}
