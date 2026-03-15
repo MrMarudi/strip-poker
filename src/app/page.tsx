@@ -2,32 +2,26 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import FloatingCards from "@/components/ui/FloatingCards";
-import { useSettings } from "@/context/SettingsContext";
+import { uiVariants } from "@/animations/specs";
 
 const GoldParticles = dynamic(() => import("@/components/ui/GoldParticles"), {
   ssr: false,
 });
 
 export default function HomePage() {
-  const { settings, updateSettings } = useSettings();
-  const [nameInput, setNameInput] = useState(settings.playerName);
-  const [showNameInput, setShowNameInput] = useState(false);
-
-  const handlePlay = () => {
-    if (settings.playerName === "Guest" && !showNameInput) {
-      setShowNameInput(true);
-      return;
-    }
-    if (nameInput.trim()) {
-      updateSettings({ playerName: nameInput.trim() });
-    }
-  };
+  const router = useRouter();
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-felt-dark">
+    <motion.main
+      variants={uiVariants.pageTransition}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="relative h-dvh flex flex-col items-center justify-center overflow-hidden bg-felt-dark"
+    >
       <GoldParticles />
       <FloatingCards />
 
@@ -42,19 +36,19 @@ export default function HomePage() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="text-center"
         >
-          <h1 className="font-playfair text-6xl md:text-8xl font-black gold-shimmer tracking-tight">
-            Texas
+          <h1 className="font-playfair text-5xl md:text-7xl font-black tracking-tight bg-gradient-to-r from-[#b8941e] via-[#f0d060] to-[#d4af37] bg-clip-text text-transparent drop-shadow-lg">
+            STRIP POKER
           </h1>
-          <h1 className="font-playfair text-5xl md:text-7xl font-black gold-shimmer tracking-tight -mt-2">
-            Hold&apos;em
+          <h1 className="font-playfair text-4xl md:text-6xl font-black tracking-tight bg-gradient-to-r from-[#d4af37] via-[#f0d060] to-[#b8941e] bg-clip-text text-transparent -mt-1">
+            VIP
           </h1>
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8 }}
-            className="mt-4 text-[#d4af37]/60 text-lg tracking-[0.3em] uppercase"
+            className="mt-4 text-[#f0e8d0]/60 text-lg tracking-[0.3em] uppercase"
           >
-            Poker Night
+            An Exclusive Experience
           </motion.p>
         </motion.div>
 
@@ -66,31 +60,6 @@ export default function HomePage() {
           className="w-48 h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent"
         />
 
-        {/* Name input */}
-        {showNameInput && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center gap-3"
-          >
-            <label className="text-[#d4af37]/70 text-sm uppercase tracking-widest">
-              Enter your name
-            </label>
-            <input
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              maxLength={20}
-              className="bg-black/30 border border-[#d4af37]/30 rounded-lg px-4 py-2 text-center text-white text-lg focus:outline-none focus:border-[#d4af37]/60 transition-colors w-64"
-              placeholder="Guest"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handlePlay();
-              }}
-            />
-          </motion.div>
-        )}
-
         {/* Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -98,46 +67,19 @@ export default function HomePage() {
           transition={{ delay: 0.6, duration: 0.6 }}
           className="flex flex-col items-center gap-4 mt-4"
         >
-          {!showNameInput ? (
-            <motion.button
-              onClick={handlePlay}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-              className="relative px-16 py-4 rounded-xl font-playfair text-2xl font-bold tracking-wider text-[#0a1f0a] bg-gradient-to-b from-[#f0d060] to-[#d4af37] glow-gold-strong transition-all"
+          <motion.button
+            onClick={() => router.push("/select")}
+            whileHover={uiVariants.button.hover}
+            whileTap={uiVariants.button.tap}
+            className="relative px-16 py-4 rounded-xl font-playfair text-2xl font-bold tracking-wider text-[#0a1f0a] bg-gradient-to-b from-[#f0d060] via-[#e8c84a] to-[#d4af37] shadow-[0_0_20px_rgba(212,175,55,0.3),0_4px_12px_rgba(0,0,0,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6),0_6px_20px_rgba(0,0,0,0.5)] border border-[#f0d060]/50 transition-shadow"
+          >
+            <motion.span
+              animate={{ opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
             >
-              <motion.span
-                animate={{ opacity: [1, 0.7, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                PLAY
-              </motion.span>
-            </motion.button>
-          ) : (
-            <Link href="/game">
-              <motion.button
-                onClick={() => {
-                  if (nameInput.trim()) {
-                    updateSettings({ playerName: nameInput.trim() });
-                  }
-                }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-                className="relative px-16 py-4 rounded-xl font-playfair text-2xl font-bold tracking-wider text-[#0a1f0a] bg-gradient-to-b from-[#f0d060] to-[#d4af37] glow-gold-strong transition-all"
-              >
-                START GAME
-              </motion.button>
-            </Link>
-          )}
-
-          <Link href="/settings">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-              className="px-10 py-3 rounded-xl font-playfair text-lg tracking-wider text-[#d4af37] border border-[#d4af37]/40 hover:border-[#d4af37]/70 hover:bg-[#d4af37]/5 transition-all"
-            >
-              SETTINGS
-            </motion.button>
-          </Link>
+              PLAY
+            </motion.span>
+          </motion.button>
         </motion.div>
 
         {/* Footer */}
@@ -147,9 +89,64 @@ export default function HomePage() {
           transition={{ delay: 1, duration: 1 }}
           className="mt-12 text-white/20 text-xs tracking-widest uppercase"
         >
-          Guest Mode
+          18+ Only
         </motion.p>
       </div>
-    </main>
+
+      {/* Shop icon — bottom left */}
+      <Link href="/shop">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2 }}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+          className="fixed bottom-6 left-6 z-20 w-12 h-12 rounded-full border border-[#d4af37]/30 bg-black/40 backdrop-blur-sm flex items-center justify-center text-[#d4af37]/70 hover:text-[#d4af37] hover:border-[#d4af37]/60 transition-colors cursor-pointer"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="9" cy="21" r="1" />
+            <circle cx="20" cy="21" r="1" />
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+          </svg>
+        </motion.div>
+      </Link>
+
+      {/* Settings gear icon — bottom right */}
+      <Link href="/settings">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2 }}
+          whileHover={{ scale: 1.15, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+          className="fixed bottom-6 right-6 z-20 w-12 h-12 rounded-full border border-[#d4af37]/30 bg-black/40 backdrop-blur-sm flex items-center justify-center text-[#d4af37]/70 hover:text-[#d4af37] hover:border-[#d4af37]/60 transition-colors cursor-pointer"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </motion.div>
+      </Link>
+    </motion.main>
   );
 }

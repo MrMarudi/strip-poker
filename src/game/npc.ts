@@ -5,8 +5,63 @@ import {
   Card,
 } from './types';
 import { evaluateHand } from './evaluator';
+import { getDialogue, DialogueSituation } from './dialogue';
 
-// ── Hand strength helpers ─────────────────────────────────────────────
+// ── Personality Profiles ─────────────────────────────────────────────
+
+export interface PersonalityProfile {
+  bluffFrequency: number;      // 0-1, how often to bluff
+  foldThreshold: number;       // 0-1, fold when hand strength below this
+  aggressionFactor: number;    // 0-1, tendency to raise vs call
+  riskTolerance: number;       // 0-1, willingness to risk chips
+  slowPlayThreshold: number;   // 0-1, when to slow-play strong hands
+  betSizeMultiplier: number;   // multiplier on bet sizing (0.5 = small, 2.0 = big)
+}
+
+export const PERSONALITY_PROFILES: Record<string, PersonalityProfile> = {
+  luna: {
+    bluffFrequency: 0.35,
+    foldThreshold: 0.2,
+    aggressionFactor: 0.5,
+    riskTolerance: 0.6,
+    slowPlayThreshold: 0.8,
+    betSizeMultiplier: 1.0,
+  },
+  sakura: {
+    bluffFrequency: 0.08,
+    foldThreshold: 0.45,
+    aggressionFactor: 0.2,
+    riskTolerance: 0.3,
+    slowPlayThreshold: 0.95,
+    betSizeMultiplier: 0.7,
+  },
+  valentina: {
+    bluffFrequency: 0.25,
+    foldThreshold: 0.15,
+    aggressionFactor: 0.75,
+    riskTolerance: 0.8,
+    slowPlayThreshold: 0.85,
+    betSizeMultiplier: 1.5,
+  },
+  emma: {
+    bluffFrequency: 0.3,
+    foldThreshold: 0.25,
+    aggressionFactor: 0.4,
+    riskTolerance: 0.5,
+    slowPlayThreshold: 0.7,
+    betSizeMultiplier: 0.9,
+  },
+  zara: {
+    bluffFrequency: 0.2,
+    foldThreshold: 0.1,
+    aggressionFactor: 0.85,
+    riskTolerance: 0.9,
+    slowPlayThreshold: 0.9,
+    betSizeMultiplier: 1.8,
+  },
+};
+
+// ── Hand Strength Helpers ────────────────────────────────────────────
 
 /**
  * Returns a normalised hand-strength score between 0 and 1.
@@ -22,19 +77,16 @@ function getHandStrength(hand: Card[], communityCards: Card[]): number {
 
   const allCards = [...hand, ...communityCards];
   if (allCards.length < 5) {
-    // Should not happen in normal flow, but guard anyway.
     return getPreflopStrength(hand);
   }
 
   const result = evaluateHand(allCards);
 
-  // Map HandResult.value (0-9) to a 0-1 range, with a small bonus for
-  // higher kickers so that e.g. a pair of Aces scores above a pair of 2s.
   const base = result.value / 9;
   const kickerBonus =
     result.cards.reduce((sum, c) => sum + cardNumericValue(c), 0) /
     (14 * 5) *
-    0.1; // tiny nudge
+    0.1;
 
   return Math.min(base + kickerBonus, 1);
 }
@@ -63,18 +115,13 @@ function getPreflopStrength(hand: Card[]): number {
   let score = 0;
 
   if (pair) {
-    // Pairs: 22 = ~0.45, AA = ~0.95
     score = 0.45 + ((high - 2) / 12) * 0.5;
   } else {
-    // High card contribution
-    score = (high + low) / 28 * 0.5; // 0..~0.5
-    // Connectedness bonus
+    score = (high + low) / 28 * 0.5;
     const gap = high - low;
     if (gap === 1) score += 0.05;
     else if (gap === 2) score += 0.03;
-    // Suited bonus
     if (suited) score += 0.06;
-    // Big card bonus
     if (high >= 13) score += 0.05;
     if (low >= 13) score += 0.05;
   }
@@ -82,7 +129,7 @@ function getPreflopStrength(hand: Card[]): number {
   return Math.min(Math.max(score, 0), 1);
 }
 
-// ── Cost helpers ──────────────────────────────────────────────────────
+// ── Cost Helpers ─────────────────────────────────────────────────────
 
 function costToCall(state: GameState, playerIndex: number): number {
   const player = state.players[playerIndex];
@@ -94,111 +141,82 @@ function canCheck(state: GameState, playerIndex: number): boolean {
   return costToCall(state, playerIndex) === 0;
 }
 
-// ── Difficulty strategies ─────────────────────────────────────────────
+// ── Difficulty Modifiers ─────────────────────────────────────────────
 
-function easyAction(
-  state: GameState,
-  npcIndex: number
-): { action: PlayerAction; amount: number } {
-  const player = state.players[npcIndex];
-  const call = costToCall(state, npcIndex);
-  const strength = getHandStrength(player.hand, state.communityCards);
+function applyDifficultyModifiers(
+  profile: PersonalityProfile,
+  difficulty: Difficulty
+): PersonalityProfile {
+  const p = { ...profile };
 
-  const roll = Math.random();
-
-  // Occasionally fold even reasonable hands (bad play)
-  if (roll < 0.1 && !canCheck(state, npcIndex)) {
-    return { action: 'fold', amount: 0 };
+  switch (difficulty) {
+    case 'easy':
+      p.bluffFrequency = Math.min(1, p.bluffFrequency + 0.15);
+      p.foldThreshold = Math.max(0, p.foldThreshold - 0.1);
+      // Easy bots are sloppier: slightly lower aggression precision
+      p.aggressionFactor = Math.max(0, p.aggressionFactor - 0.1);
+      break;
+    case 'medium':
+      // Use base profile as-is
+      break;
+    case 'hard':
+      p.foldThreshold = Math.min(1, p.foldThreshold + 0.05);
+      // Hard bots bluff less recklessly
+      p.bluffFrequency = Math.max(0, p.bluffFrequency - 0.05);
+      // Slightly sharper aggression
+      p.aggressionFactor = Math.min(1, p.aggressionFactor + 0.05);
+      break;
   }
 
-  // If free to check, usually check; small chance of a random raise
-  if (canCheck(state, npcIndex)) {
-    if (roll > 0.85 && strength > 0.4) {
-      const raiseAmt = state.bigBlind;
-      if (player.chips >= raiseAmt) {
-        return { action: 'raise', amount: raiseAmt };
-      }
-    }
-    return { action: 'check', amount: 0 };
-  }
-
-  // Facing a bet: mostly call, sometimes fold weak hands
-  if (strength < 0.25 && roll < 0.5) {
-    return { action: 'fold', amount: 0 };
-  }
-
-  if (call >= player.chips) {
-    // Must go all-in to continue
-    return strength > 0.3
-      ? { action: 'all-in', amount: player.chips }
-      : { action: 'fold', amount: 0 };
-  }
-
-  return { action: 'call', amount: call };
+  return p;
 }
 
-function mediumAction(
-  state: GameState,
-  npcIndex: number
-): { action: PlayerAction; amount: number } {
-  const player = state.players[npcIndex];
-  const call = costToCall(state, npcIndex);
-  const strength = getHandStrength(player.hand, state.communityCards);
-  const potOdds = call > 0 ? call / (state.pot + call) : 0;
+// ── Dialogue Selection ───────────────────────────────────────────────
 
-  // Free check
-  if (canCheck(state, npcIndex)) {
-    if (strength > 0.65) {
-      const raiseAmt = Math.max(
-        state.bigBlind,
-        Math.floor(state.pot * 0.5)
-      );
-      if (player.chips >= raiseAmt) {
-        return { action: 'raise', amount: raiseAmt };
-      }
-    }
-    if (strength > 0.45 && Math.random() < 0.3) {
-      const raiseAmt = state.bigBlind;
-      if (player.chips >= raiseAmt) {
-        return { action: 'raise', amount: raiseAmt };
-      }
-    }
-    return { action: 'check', amount: 0 };
-  }
+function pickDialogue(
+  characterId: string,
+  action: PlayerAction,
+  strength: number,
+  isBluff: boolean
+): string | null {
+  // Only produce dialogue ~40% of the time to avoid spam
+  if (Math.random() > 0.4) return null;
 
-  // Facing a bet
-  if (strength < 0.2) {
-    return { action: 'fold', amount: 0 };
-  }
+  let situation: DialogueSituation;
 
-  if (strength < potOdds) {
-    return { action: 'fold', amount: 0 };
-  }
-
-  if (call >= player.chips) {
-    return strength > 0.5
-      ? { action: 'all-in', amount: player.chips }
-      : { action: 'fold', amount: 0 };
-  }
-
-  // Strong hand: raise
-  if (strength > 0.7) {
-    const raiseAmt = Math.max(
-      state.bigBlind,
-      Math.floor(state.pot * 0.6)
-    );
-    if (player.chips >= call + raiseAmt) {
-      return { action: 'raise', amount: raiseAmt };
+  if (isBluff) {
+    situation = 'bluff';
+  } else if (action === 'fold') {
+    situation = 'fold';
+  } else if (action === 'all-in') {
+    situation = 'allIn';
+  } else if (action === 'raise') {
+    situation = strength > 0.7 ? 'confident' : 'raise';
+  } else if (action === 'call') {
+    situation = strength < 0.3 ? 'nervous' : 'call';
+  } else {
+    // check — use taunt or confident based on hand
+    if (strength > 0.7) {
+      situation = 'confident';
+    } else if (strength < 0.25) {
+      situation = 'nervous';
+    } else {
+      situation = Math.random() < 0.5 ? 'taunt' : 'call';
     }
   }
 
-  return { action: 'call', amount: call };
+  return getDialogue(characterId, situation);
 }
 
-function hardAction(
+// ── Personality-Driven Decision Engine ───────────────────────────────
+
+function personalityAction(
   state: GameState,
-  npcIndex: number
-): { action: PlayerAction; amount: number } {
+  npcIndex: number,
+  profile: PersonalityProfile,
+  characterId: string,
+  difficulty: Difficulty
+): { action: PlayerAction; amount: number; dialogue?: string } {
   const player = state.players[npcIndex];
   const call = costToCall(state, npcIndex);
   const strength = getHandStrength(player.hand, state.communityCards);
@@ -208,99 +226,214 @@ function hardAction(
   // Adjust strength downward with more opponents (multiway pots)
   const adjustedStrength = strength * (1 - (activePlayers - 2) * 0.03);
 
-  // Bluff probability (higher in later streets, lower with many opponents)
-  const bluffChance =
-    state.phase === 'river'
-      ? 0.2
-      : state.phase === 'turn'
-        ? 0.12
-        : 0.06;
+  // Easy difficulty adds randomness to decisions
+  const randomNoise = difficulty === 'easy' ? (Math.random() - 0.5) * 0.15 : 0;
+  const effectiveStrength = Math.max(0, Math.min(1, adjustedStrength + randomNoise));
 
-  // Free check
+  const roll = Math.random();
+  let isBluff = false;
+
+  // ── Bluff Detection ────────────────────────────────────────────
+  // Street-dependent bluff scaling: bluffs become less frequent on later streets
+  const streetBluffScale =
+    state.phase === 'preflop' ? 0.8 :
+    state.phase === 'flop' ? 1.0 :
+    state.phase === 'turn' ? 1.1 :
+    1.2; // river bluffs are slightly more common (semi-rational)
+
+  const shouldBluff =
+    effectiveStrength < profile.foldThreshold &&
+    roll < profile.bluffFrequency * streetBluffScale;
+
+  // ── Slow-play Detection ────────────────────────────────────────
+  const shouldSlowPlay =
+    effectiveStrength > profile.slowPlayThreshold &&
+    roll < (1 - profile.aggressionFactor) * 0.4;
+
+  // ── Free Check Scenario ────────────────────────────────────────
   if (canCheck(state, npcIndex)) {
-    // Strong hand: bet for value
-    if (adjustedStrength > 0.6) {
-      const sizeFactor = adjustedStrength > 0.8 ? 0.75 : 0.5;
+    // Strong hand: bet for value (unless slow-playing)
+    if (effectiveStrength > 0.6 && !shouldSlowPlay) {
+      const sizeFactor = effectiveStrength > 0.8
+        ? 0.75 * profile.betSizeMultiplier
+        : 0.5 * profile.betSizeMultiplier;
       const raiseAmt = Math.max(
         state.bigBlind,
         Math.floor(state.pot * sizeFactor)
       );
       if (player.chips >= raiseAmt) {
-        return { action: 'raise', amount: raiseAmt };
+        // Use aggression factor to decide between raise and check
+        if (roll < profile.aggressionFactor) {
+          const dialogue = pickDialogue(characterId, 'raise', strength, false);
+          return { action: 'raise', amount: raiseAmt, dialogue: dialogue ?? undefined };
+        }
       }
     }
-    // Occasional bluff
-    if (adjustedStrength < 0.3 && Math.random() < bluffChance) {
+
+    // Slow-playing a monster: just check
+    if (shouldSlowPlay) {
+      const dialogue = pickDialogue(characterId, 'check', strength, false);
+      return { action: 'check', amount: 0, dialogue: dialogue ?? undefined };
+    }
+
+    // Bluff: bet with a weak hand
+    if (shouldBluff) {
+      isBluff = true;
+      const bluffSize = Math.max(
+        state.bigBlind,
+        Math.floor(state.pot * 0.6 * profile.betSizeMultiplier)
+      );
+      if (player.chips >= bluffSize) {
+        const dialogue = pickDialogue(characterId, 'raise', strength, true);
+        return { action: 'raise', amount: bluffSize, dialogue: dialogue ?? undefined };
+      }
+    }
+
+    // Medium hand: occasional small bet based on aggression
+    if (effectiveStrength > 0.4 && roll < profile.aggressionFactor * 0.5) {
       const raiseAmt = Math.max(
         state.bigBlind,
-        Math.floor(state.pot * 0.6)
+        Math.floor(state.pot * 0.4 * profile.betSizeMultiplier)
       );
       if (player.chips >= raiseAmt) {
-        return { action: 'raise', amount: raiseAmt };
+        const dialogue = pickDialogue(characterId, 'raise', strength, false);
+        return { action: 'raise', amount: raiseAmt, dialogue: dialogue ?? undefined };
       }
     }
-    return { action: 'check', amount: 0 };
+
+    const dialogue = pickDialogue(characterId, 'check', strength, false);
+    return { action: 'check', amount: 0, dialogue: dialogue ?? undefined };
   }
 
-  // Facing a bet
+  // ── Facing a Bet ───────────────────────────────────────────────
 
-  // Very strong: re-raise
-  if (adjustedStrength > 0.8) {
+  // Very strong hand: re-raise
+  if (effectiveStrength > 0.8) {
     const raiseAmt = Math.max(
       state.bigBlind,
-      Math.floor(state.pot * 0.75)
+      Math.floor(state.pot * 0.75 * profile.betSizeMultiplier)
     );
-    if (player.chips >= call + raiseAmt) {
-      return { action: 'raise', amount: raiseAmt };
+
+    if (roll < profile.aggressionFactor) {
+      // All-in with monsters when risk tolerance is high
+      if (effectiveStrength > 0.9 && roll < profile.riskTolerance * 0.5) {
+        if (player.chips <= call) {
+          const dialogue = pickDialogue(characterId, 'all-in', strength, false);
+          return { action: 'all-in', amount: player.chips, dialogue: dialogue ?? undefined };
+        }
+        const dialogue = pickDialogue(characterId, 'all-in', strength, false);
+        return { action: 'all-in', amount: player.chips, dialogue: dialogue ?? undefined };
+      }
+
+      if (player.chips >= call + raiseAmt) {
+        const dialogue = pickDialogue(characterId, 'raise', strength, false);
+        return { action: 'raise', amount: raiseAmt, dialogue: dialogue ?? undefined };
+      }
     }
+
+    // Can't raise enough, just call
     if (player.chips <= call) {
-      return { action: 'all-in', amount: player.chips };
+      const dialogue = pickDialogue(characterId, 'all-in', strength, false);
+      return { action: 'all-in', amount: player.chips, dialogue: dialogue ?? undefined };
     }
-    return { action: 'call', amount: call };
+    const dialogue = pickDialogue(characterId, 'call', strength, false);
+    return { action: 'call', amount: call, dialogue: dialogue ?? undefined };
   }
 
-  // Decent hand: call if pot odds are right
-  if (adjustedStrength >= potOdds + 0.05) {
-    if (call >= player.chips) {
-      return adjustedStrength > 0.55
-        ? { action: 'all-in', amount: player.chips }
-        : { action: 'fold', amount: 0 };
+  // Bluff re-raise with a weak hand
+  if (shouldBluff) {
+    isBluff = true;
+    const bluffRaise = Math.max(
+      state.bigBlind,
+      Math.floor(state.pot * 0.65 * profile.betSizeMultiplier)
+    );
+    if (player.chips >= call + bluffRaise) {
+      const dialogue = pickDialogue(characterId, 'raise', strength, true);
+      return { action: 'raise', amount: bluffRaise, dialogue: dialogue ?? undefined };
     }
-    return { action: 'call', amount: call };
   }
 
-  // Bluff re-raise with a weak hand occasionally
-  if (adjustedStrength < 0.25 && Math.random() < bluffChance * 0.5) {
+  // Hand too weak: fold based on threshold + pot odds
+  if (effectiveStrength < profile.foldThreshold && !shouldBluff) {
+    // Even weak folders stay in sometimes based on risk tolerance
+    if (roll > profile.riskTolerance) {
+      const dialogue = pickDialogue(characterId, 'fold', strength, false);
+      return { action: 'fold', amount: 0, dialogue: dialogue ?? undefined };
+    }
+  }
+
+  // Decent hand: check pot odds
+  if (effectiveStrength < potOdds + 0.05 && effectiveStrength < 0.5) {
+    // Loose players (low foldThreshold, high riskTolerance) call anyway
+    if (roll > profile.riskTolerance) {
+      const dialogue = pickDialogue(characterId, 'fold', strength, false);
+      return { action: 'fold', amount: 0, dialogue: dialogue ?? undefined };
+    }
+  }
+
+  // Medium-strong hand: raise sometimes based on aggression
+  if (effectiveStrength > 0.55 && roll < profile.aggressionFactor * 0.6) {
     const raiseAmt = Math.max(
       state.bigBlind,
-      Math.floor(state.pot * 0.65)
+      Math.floor(state.pot * 0.5 * profile.betSizeMultiplier)
     );
     if (player.chips >= call + raiseAmt) {
-      return { action: 'raise', amount: raiseAmt };
+      const dialogue = pickDialogue(characterId, 'raise', strength, false);
+      return { action: 'raise', amount: raiseAmt, dialogue: dialogue ?? undefined };
     }
   }
 
-  // Otherwise fold
-  return { action: 'fold', amount: 0 };
+  // All-in decision when call would take most of our chips
+  if (call >= player.chips) {
+    const allInThreshold = 0.3 + profile.riskTolerance * 0.3;
+    if (effectiveStrength > allInThreshold) {
+      const dialogue = pickDialogue(characterId, 'all-in', strength, false);
+      return { action: 'all-in', amount: player.chips, dialogue: dialogue ?? undefined };
+    }
+    const dialogue = pickDialogue(characterId, 'fold', strength, false);
+    return { action: 'fold', amount: 0, dialogue: dialogue ?? undefined };
+  }
+
+  // Default: call
+  const dialogue = pickDialogue(characterId, 'call', strength, false);
+  return { action: 'call', amount: call, dialogue: dialogue ?? undefined };
 }
 
 // ── Public API ────────────────────────────────────────────────────────
 
 /**
- * Returns the action and amount an NPC should take given the current
- * game state, the NPC's index, and the chosen difficulty level.
+ * Returns the action, amount, and optional dialogue an NPC should take
+ * given the current game state, the NPC's index, and the chosen
+ * difficulty level.
+ *
+ * When a characterId is provided, the NPC uses a personality-driven
+ * decision engine. Otherwise falls back to a default balanced profile.
  */
 export function getNPCAction(
   gameState: GameState,
   npcIndex: number,
-  difficulty: Difficulty
-): { action: PlayerAction; amount: number } {
-  switch (difficulty) {
-    case 'easy':
-      return easyAction(gameState, npcIndex);
-    case 'medium':
-      return mediumAction(gameState, npcIndex);
-    case 'hard':
-      return hardAction(gameState, npcIndex);
-  }
+  difficulty: Difficulty,
+  characterId?: string
+): { action: PlayerAction; amount: number; dialogue?: string } {
+  // Resolve character ID: use provided value, try to infer from player id, or default
+  const resolvedId = characterId
+    ?? inferCharacterId(gameState.players[npcIndex]?.name)
+    ?? 'luna';
+
+  const baseProfile = PERSONALITY_PROFILES[resolvedId.toLowerCase()]
+    ?? PERSONALITY_PROFILES.luna;
+
+  const profile = applyDifficultyModifiers(baseProfile, difficulty);
+
+  return personalityAction(gameState, npcIndex, profile, resolvedId.toLowerCase(), difficulty);
+}
+
+/**
+ * Attempt to infer a character ID from the NPC's display name.
+ */
+function inferCharacterId(name?: string): string | null {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  const knownIds = ['luna', 'sakura', 'valentina', 'emma', 'zara'];
+  return knownIds.find((id) => lower.includes(id)) ?? null;
 }

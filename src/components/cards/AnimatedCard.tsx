@@ -1,32 +1,66 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import CardSVG from './CardSVG';
 import CardBack from './CardBack';
+import { cardVariants, TIMING, EASING } from '@/animations/specs';
+import { TOKENS } from '@/design/tokens';
+import type { Card } from '@/game/types';
+
+export type CardState = 'faceDown' | 'faceUp' | 'dealing' | 'highlighted';
 
 interface AnimatedCardProps {
-  card?: {
-    suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
-    rank: '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
-  };
-  faceUp: boolean;
+  card?: Card;
+  faceUp?: boolean;
+  state?: CardState;
+  delay?: number;
   cardBackStyle?: 'classic' | 'elegant' | 'modern';
   width?: number;
   height?: number;
-  delay?: number;
+  highlighted?: boolean;
   className?: string;
 }
 
+const dealVariants: Variants = {
+  initial: cardVariants.deal.initial,
+  animate: (delay: number) => ({
+    ...cardVariants.deal.animate,
+    transition: {
+      ...cardVariants.deal.animate.transition,
+      delay,
+    },
+  }),
+  exit: cardVariants.deal.exit,
+};
+
+const highlightVariants: Variants = {
+  initial: cardVariants.winHighlight.initial,
+  animate: {
+    ...cardVariants.winHighlight.animate,
+    transition: {
+      ...(cardVariants.winHighlight.animate as Record<string, unknown>).transition as object,
+      ease: 'easeInOut' as const,
+    },
+  },
+};
+
 const AnimatedCard: React.FC<AnimatedCardProps> = ({
   card,
-  faceUp,
+  faceUp = false,
+  state,
   cardBackStyle = 'classic',
   width = 100,
   height = 140,
   delay = 0,
+  highlighted = false,
   className,
 }) => {
+  const resolvedState = state ?? (faceUp ? 'faceUp' : 'faceDown');
+  const isFaceUp = resolvedState === 'faceUp' || resolvedState === 'highlighted';
+  const isHighlighted = resolvedState === 'highlighted' || highlighted;
+  const isDealing = resolvedState === 'dealing';
+
   return (
     <motion.div
       className={className}
@@ -35,87 +69,81 @@ const AnimatedCard: React.FC<AnimatedCardProps> = ({
         height,
         perspective: 800,
         display: 'inline-block',
+        borderRadius: TOKENS.radius.card,
       }}
-      /* Deal animation: slide in from off-screen right with scale */
-      initial={{
-        x: 300,
-        y: -200,
-        scale: 0.5,
-        opacity: 0,
-      }}
-      animate={{
-        x: 0,
-        y: 0,
-        scale: 1,
-        opacity: 1,
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 260,
-        damping: 20,
-        delay,
-      }}
+      variants={dealVariants}
+      custom={delay}
+      initial="initial"
+      animate="animate"
+      exit="exit"
     >
+      {/* Golden glow wrapper for highlighted (winning) cards */}
       <motion.div
+        variants={isHighlighted ? highlightVariants : undefined}
+        initial={isHighlighted ? 'initial' : undefined}
+        animate={isHighlighted ? 'animate' : undefined}
         style={{
           width: '100%',
           height: '100%',
-          position: 'relative',
-          transformStyle: 'preserve-3d',
-        }}
-        animate={{
-          rotateY: faceUp ? 0 : 180,
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 300,
-          damping: 25,
-          delay: delay * 0.3,
+          borderRadius: TOKENS.radius.card,
+          boxShadow: isHighlighted ? TOKENS.shadows.goldGlow : TOKENS.shadows.card,
         }}
       >
-        {/* Front face */}
-        <div
+        {/* 3D flip container */}
+        <motion.div
           style={{
-            position: 'absolute',
             width: '100%',
             height: '100%',
-            backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden',
+            position: 'relative',
+            transformStyle: 'preserve-3d',
           }}
+          variants={cardVariants.flip}
+          animate={isFaceUp ? 'faceUp' : 'faceDown'}
         >
-          {card ? (
-            <CardSVG
-              suit={card.suit}
-              rank={card.rank}
-              width={width}
-              height={height}
-            />
-          ) : (
+          {/* Front face */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+            }}
+          >
+            {card ? (
+              <CardSVG
+                suit={card.suit}
+                rank={card.rank}
+                width={width}
+                height={height}
+              />
+            ) : (
+              <CardBack
+                style={cardBackStyle}
+                width={width}
+                height={height}
+              />
+            )}
+          </div>
+
+          {/* Back face */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
+            }}
+          >
             <CardBack
               style={cardBackStyle}
               width={width}
               height={height}
             />
-          )}
-        </div>
-
-        {/* Back face */}
-        <div
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden',
-            transform: 'rotateY(180deg)',
-          }}
-        >
-          <CardBack
-            style={cardBackStyle}
-            width={width}
-            height={height}
-          />
-        </div>
+          </div>
+        </motion.div>
       </motion.div>
     </motion.div>
   );

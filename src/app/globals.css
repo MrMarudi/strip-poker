@@ -1,25 +1,93 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Strip Poker VIP — Luxury Casino Design Token System
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @theme {
-  --color-felt: #1a472a;
+  /* ── Colors ───────────────────────────────────────────────────────────── */
+  --color-void: #07060a;
   --color-felt-dark: #0a1f0a;
+  --color-felt: #1a472a;
+  --color-velvet: #1a0a2e;
   --color-gold: #d4af37;
   --color-gold-light: #f0d060;
+  --color-gold-dark: #b8941e;
+  --color-cream: #f0e8d0;
+  --color-ruby: #c41e3a;
+  --color-emerald: #2d6a4f;
+  --color-card-white: #fafaf8;
+  --color-card-stroke: #2a2a3a;
   --color-card-back: #8b0000;
   --color-dark-accent: #1a1a2e;
-  --font-playfair: "Playfair Display", serif;
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-playfair: 'Playfair Display', serif;
+
+  /* ── Border Radius ────────────────────────────────────────────────────── */
+  --radius-card: 8px;
+  --radius-chip: 50%;
+  --radius-button: 12px;
+  --radius-panel: 16px;
+
+  /* ── Spacing (4px base) ───────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-11: 44px;
+  --space-12: 48px;
 }
+
+/* ── CSS Custom Properties (non-theme: shadows, gradients, animations) ── */
+:root {
+  /* Shadows */
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-gold-glow: 0 0 20px rgba(212, 175, 55, 0.3);
+  --shadow-gold-rim: 0 0 8px rgba(212, 175, 55, 0.5), inset 0 0 4px rgba(212, 175, 55, 0.2);
+  --shadow-chip: 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+
+  /* Gradients */
+  --gradient-gold-shimmer: linear-gradient(135deg, #b8941e, #d4af37, #f0d060, #d4af37, #b8941e);
+  --gradient-velvet-depth: linear-gradient(180deg, #1a0a2e, #0d0518);
+  --gradient-felt: radial-gradient(ellipse at center, #1a472a, #0a1f0a);
+  --gradient-gold-text: linear-gradient(135deg, #d4af37, #f0d060);
+
+  /* Animation Timing */
+  --timing-chip: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --timing-card: 500ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --timing-flip: 600ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --timing-celebration: 800ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --timing-dialogue: 400ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   body {
     background-color: var(--color-felt-dark);
     color: white;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-body);
     overflow-x: hidden;
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @layer utilities {
+  /* Legacy compatibility utilities */
   .font-playfair {
     font-family: var(--font-playfair);
   }
@@ -36,6 +104,7 @@
     background-color: var(--color-felt-dark);
   }
 
+  /* ── Gold shimmer text effect ──────────────────────────────────────── */
   .gold-shimmer {
     background: linear-gradient(
       90deg,
@@ -58,11 +127,63 @@
     }
   }
 
+  /* ── Glow effects ──────────────────────────────────────────────────── */
   .glow-gold {
     box-shadow: 0 0 20px rgba(212, 175, 55, 0.4), 0 0 40px rgba(212, 175, 55, 0.2);
   }
 
   .glow-gold-strong {
     box-shadow: 0 0 20px rgba(212, 175, 55, 0.6), 0 0 60px rgba(212, 175, 55, 0.3), 0 0 100px rgba(212, 175, 55, 0.1);
+  }
+
+  /* ── Casino shadows ────────────────────────────────────────────────── */
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-gold-glow {
+    box-shadow: var(--shadow-gold-glow);
+  }
+
+  .shadow-gold-rim {
+    box-shadow: var(--shadow-gold-rim);
+  }
+
+  .shadow-chip {
+    box-shadow: var(--shadow-chip);
+  }
+
+  /* ── Gradient backgrounds ──────────────────────────────────────────── */
+  .bg-gold-shimmer {
+    background: var(--gradient-gold-shimmer);
+  }
+
+  .bg-velvet-depth {
+    background: var(--gradient-velvet-depth);
+  }
+
+  .bg-felt-radial {
+    background: var(--gradient-felt);
+  }
+
+  .text-gold-gradient {
+    background: var(--gradient-gold-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ── Font utilities ────────────────────────────────────────────────── */
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  /* ── Safe area padding for notched devices ──────────────────────── */
+  .safe-bottom {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 }

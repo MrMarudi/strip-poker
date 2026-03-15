@@ -60,3 +60,51 @@ export interface GameState {
   winnerHand: string | null;
   roundOver: boolean;
 }
+
+// === Event-Driven Architecture & Strip Mechanic Types ===
+
+// Character personality for AI behavior
+export type Personality = 'tease' | 'shy' | 'cocky';
+
+// Character definition
+export interface Character {
+  id: string;
+  displayName: string;
+  personality: Personality;
+  totalLayers: number;       // total clothing layers (6)
+  currentLayer: number;      // current layer (1 = fully clothed, 6 = final)
+  handsWon: number;
+  handsLost: number;
+}
+
+// Game event types for animation system
+export type GameEventType =
+  | 'ROUND_START'
+  | 'BLINDS_POSTED'
+  | 'CARDS_DEALT'
+  | 'PLAYER_ACTION'
+  | 'PHASE_CHANGE'
+  | 'COMMUNITY_DEALT'
+  | 'SHOWDOWN'
+  | 'HAND_RESULT'
+  | 'POT_AWARDED'
+  | 'STRIP_TRIGGER'
+  | 'LAYER_CHANGE'
+  | 'GAME_OVER'
+  | 'DIALOGUE';
+
+// Game event payload
+export interface GameEvent {
+  type: GameEventType;
+  timestamp: number;
+  payload: Record<string, unknown>;
+}
+
+// Extended game state with events and character tracking
+export interface ExtendedGameState extends GameState {
+  character: Character;      // the opponent character
+  roundNumber: number;
+  events: GameEvent[];       // events emitted this round (for animation queue)
+  gameOver: boolean;
+  gameOverReason?: 'player_broke' | 'opponent_broke' | 'opponent_stripped';
+}

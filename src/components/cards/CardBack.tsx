@@ -1,20 +1,47 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 interface CardBackProps {
-  style?: 'classic' | 'elegant' | 'modern';
+  style?: 'classic' | 'elegant' | 'modern' | 'premium';
   width?: number;
   height?: number;
   className?: string;
 }
 
 const CardBack: React.FC<CardBackProps> = ({
-  style = 'classic',
+  style = 'premium',
   width = 100,
   height = 140,
   className,
 }) => {
+  if (style === 'premium') {
+    return (
+      <div
+        className={className}
+        style={{
+          width,
+          height,
+          borderRadius: 8,
+          overflow: 'hidden',
+          position: 'relative',
+          border: '1.5px solid rgba(212, 175, 55, 0.4)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(212,175,55,0.15)',
+        }}
+      >
+        <Image
+          src="/cards/back.png"
+          alt="Card back"
+          fill
+          sizes={`${width}px`}
+          style={{ objectFit: 'cover' }}
+          priority
+        />
+      </div>
+    );
+  }
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

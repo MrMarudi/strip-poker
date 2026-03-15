@@ -3,9 +3,14 @@ import {
   Player,
   PlayerAction,
   GamePhase,
+  Difficulty,
+  Personality,
+  Character,
+  ExtendedGameState,
 } from './types';
 import { createDeck, shuffleDeck, dealCards } from './deck';
 import { evaluateHand, compareHands } from './evaluator';
+import { emitEvent } from './events';
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -28,6 +33,20 @@ function cloneState(state: GameState): GameState {
     })),
     communityCards: [...state.communityCards],
     deck: [...state.deck],
+  };
+}
+
+/**
+ * Clones an ExtendedGameState, preserving all extended fields.
+ */
+function cloneExtendedState(state: ExtendedGameState): ExtendedGameState {
+  return {
+    ...cloneState(state),
+    character: { ...state.character },
+    roundNumber: state.roundNumber,
+    events: [...state.events],
+    gameOver: state.gameOver,
+    gameOverReason: state.gameOverReason,
   };
 }
 
@@ -55,6 +74,13 @@ function activePlayerCount(players: Player[]): number {
 
 function playersStillActing(players: Player[]): number {
   return players.filter((p) => !p.folded && p.chips > 0).length;
+}
+
+/**
+ * Type guard: checks whether a GameState is actually an ExtendedGameState.
+ */
+function isExtended(state: GameState): state is ExtendedGameState {
+  return 'events' in state && 'character' in state;
 }
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -104,8 +130,46 @@ export function createInitialState(playerName: string): GameState {
 }
 
 /**
+ * Creates an ExtendedGameState with character tracking and event queue.
+ * Use this instead of createInitialState when the strip mechanic is active.
+ */
+export function createExtendedState(
+  playerName: string,
+  characterId: string,
+  displayName: string,
+  personality: Personality = 'tease',
+  difficulty: Difficulty = 'medium'
+): ExtendedGameState {
+  const base = createInitialState(playerName);
+  // Rename NPC to the character's display name
+  base.players[1].name = displayName;
+
+  const character: Character = {
+    id: characterId,
+    displayName,
+    personality,
+    totalLayers: 6,
+    currentLayer: 1, // fully clothed
+    handsWon: 0,
+    handsLost: 0,
+  };
+
+  return {
+    ...base,
+    character,
+    roundNumber: 0,
+    events: [],
+    gameOver: false,
+    gameOverReason: undefined,
+  };
+}
+
+/**
  * Starts a new round: resets per-round state, shuffles the deck,
  * deals two cards to each player, and posts the blinds.
+ *
+ * When called with an ExtendedGameState, emits ROUND_START,
+ * BLINDS_POSTED, and CARDS_DEALT events.
  */
 export function startNewRound(state: GameState): GameState {
   const s = cloneState(state);
@@ -164,6 +228,34 @@ export function startNewRound(state: GameState): GameState {
   s.currentPlayerIndex = nextActivePlayerIndex(s.players, bbIdx);
   s.phase = 'preflop';
 
+  // If this is an extended state, emit events
+  if (isExtended(state)) {
+    let ext: ExtendedGameState = {
+      ...s,
+      character: { ...state.character },
+      roundNumber: state.roundNumber + 1,
+      events: [], // clear previous round's events
+      gameOver: state.gameOver,
+      gameOverReason: state.gameOverReason,
+    };
+
+    ext = emitEvent(ext, 'ROUND_START', {
+      roundNumber: ext.roundNumber,
+      dealerIndex: ext.dealerIndex,
+    });
+
+    ext = emitEvent(ext, 'BLINDS_POSTED', {
+      smallBlind: { playerId: sbPlayer.id, amount: sbAmount },
+      bigBlind: { playerId: bbPlayer.id, amount: bbAmount },
+    });
+
+    ext = emitEvent(ext, 'CARDS_DEALT', {
+      playerCount: ext.players.filter((p) => !p.folded).length,
+    });
+
+    return ext;
+  }
+
   return s;
 }
 
@@ -172,6 +264,8 @@ export function startNewRound(state: GameState): GameState {
  * Returns the updated game state. Does NOT advance the phase
  * automatically; the caller should check whether the betting round
  * is complete and call advancePhase when appropriate.
+ *
+ * When called with an ExtendedGameState, emits PLAYER_ACTION events.
  */
 export function handlePlayerAction(
   state: GameState,
@@ -179,7 +273,8 @@ export function handlePlayerAction(
   amount?: number
 ): GameState {
   const s = cloneState(state);
-  const player = s.players[s.currentPlayerIndex];
+  const actingIndex = s.currentPlayerIndex;
+  const player = s.players[actingIndex];
 
   const highestBet = Math.max(...s.players.map((p) => p.currentBet));
   const toCall = highestBet - player.currentBet;
@@ -237,6 +332,37 @@ export function handlePlayerAction(
     s.winnerHand = 'Last player standing';
     s.roundOver = true;
     s.phase = 'showdown';
+
+    if (isExtended(state)) {
+      let ext: ExtendedGameState = {
+        ...s,
+        character: { ...state.character },
+        roundNumber: (state as ExtendedGameState).roundNumber,
+        events: [...(state as ExtendedGameState).events],
+        gameOver: (state as ExtendedGameState).gameOver,
+        gameOverReason: (state as ExtendedGameState).gameOverReason,
+      };
+
+      ext = emitEvent(ext, 'PLAYER_ACTION', {
+        playerId: player.id,
+        action,
+        amount: amount ?? 0,
+      });
+
+      ext = emitEvent(ext, 'HAND_RESULT', {
+        winnerId: winnerPlayer.id,
+        winnerName: winnerPlayer.name,
+        reason: 'fold',
+      });
+
+      ext = emitEvent(ext, 'POT_AWARDED', {
+        winnerId: winnerPlayer.id,
+        amount: s.players.find((p) => p.id === winnerPlayer.id)!.chips,
+      });
+
+      return ext;
+    }
+
     return s;
   }
 
@@ -245,6 +371,26 @@ export function handlePlayerAction(
     s.players,
     s.currentPlayerIndex
   );
+
+  // Emit PLAYER_ACTION for extended state
+  if (isExtended(state)) {
+    let ext: ExtendedGameState = {
+      ...s,
+      character: { ...state.character },
+      roundNumber: (state as ExtendedGameState).roundNumber,
+      events: [...(state as ExtendedGameState).events],
+      gameOver: (state as ExtendedGameState).gameOver,
+      gameOverReason: (state as ExtendedGameState).gameOverReason,
+    };
+
+    ext = emitEvent(ext, 'PLAYER_ACTION', {
+      playerId: player.id,
+      action,
+      amount: amount ?? 0,
+    });
+
+    return ext;
+  }
 
   return s;
 }
@@ -280,6 +426,9 @@ export function isBettingRoundComplete(state: GameState): boolean {
  *   flop    -> turn  (deal 1)
  *   turn    -> river (deal 1)
  *   river   -> showdown
+ *
+ * When called with an ExtendedGameState, emits PHASE_CHANGE and
+ * COMMUNITY_DEALT events.
  */
 export function advancePhase(state: GameState): GameState {
   const s = cloneState(state);
@@ -292,8 +441,11 @@ export function advancePhase(state: GameState): GameState {
 
   // If only one (or zero) players can still act, skip to showdown
   if (playersStillActing(s.players) <= 1) {
-    return fastForwardToShowdown(s);
+    return fastForwardToShowdown(s, isExtended(state) ? state as ExtendedGameState : undefined);
   }
+
+  const prevPhase = s.phase;
+  let dealtCards: typeof s.communityCards = [];
 
   switch (s.phase) {
     case 'preflop': {
@@ -301,6 +453,7 @@ export function advancePhase(state: GameState): GameState {
       s.deck = s.deck.slice(1); // burn
       const { dealt, remaining } = dealCards(s.deck, 3);
       s.communityCards.push(...dealt);
+      dealtCards = dealt;
       s.deck = remaining;
       s.phase = 'flop';
       break;
@@ -309,6 +462,7 @@ export function advancePhase(state: GameState): GameState {
       s.deck = s.deck.slice(1); // burn
       const { dealt, remaining } = dealCards(s.deck, 1);
       s.communityCards.push(...dealt);
+      dealtCards = dealt;
       s.deck = remaining;
       s.phase = 'turn';
       break;
@@ -317,13 +471,14 @@ export function advancePhase(state: GameState): GameState {
       s.deck = s.deck.slice(1); // burn
       const { dealt, remaining } = dealCards(s.deck, 1);
       s.communityCards.push(...dealt);
+      dealtCards = dealt;
       s.deck = remaining;
       s.phase = 'river';
       break;
     }
     case 'river': {
       s.phase = 'showdown';
-      return determineWinner(s);
+      return determineWinner(s, isExtended(state) ? state as ExtendedGameState : undefined);
     }
     default:
       return s;
@@ -335,6 +490,30 @@ export function advancePhase(state: GameState): GameState {
     s.dealerIndex
   );
 
+  // Emit events for extended state
+  if (isExtended(state)) {
+    let ext: ExtendedGameState = {
+      ...s,
+      character: { ...state.character },
+      roundNumber: (state as ExtendedGameState).roundNumber,
+      events: [...(state as ExtendedGameState).events],
+      gameOver: (state as ExtendedGameState).gameOver,
+      gameOverReason: (state as ExtendedGameState).gameOverReason,
+    };
+
+    ext = emitEvent(ext, 'PHASE_CHANGE', {
+      from: prevPhase,
+      to: s.phase,
+    });
+
+    ext = emitEvent(ext, 'COMMUNITY_DEALT', {
+      cards: dealtCards,
+      totalCommunity: s.communityCards.length,
+    });
+
+    return ext;
+  }
+
   return s;
 }
 
@@ -342,7 +521,10 @@ export function advancePhase(state: GameState): GameState {
  * Fast-forwards through remaining community cards and goes to showdown.
  * Used when all players are all-in (nobody can bet further).
  */
-function fastForwardToShowdown(state: GameState): GameState {
+function fastForwardToShowdown(
+  state: GameState,
+  extSource?: ExtendedGameState
+): GameState {
   const s = cloneState(state);
 
   // Deal remaining community cards
@@ -354,14 +536,20 @@ function fastForwardToShowdown(state: GameState): GameState {
   }
 
   s.phase = 'showdown';
-  return determineWinner(s);
+  return determineWinner(s, extSource);
 }
 
 /**
  * Evaluates all non-folded players' hands against the community cards
  * and determines the winner. Awards the pot to the winner.
+ *
+ * When extended state info is provided, emits SHOWDOWN, HAND_RESULT,
+ * and POT_AWARDED events.
  */
-export function determineWinner(state: GameState): GameState {
+export function determineWinner(
+  state: GameState,
+  extSource?: ExtendedGameState
+): GameState {
   const s = cloneState(state);
 
   const contenders = s.players.filter((p) => !p.folded);
@@ -397,11 +585,137 @@ export function determineWinner(state: GameState): GameState {
 
   // Award pot to winner (simplified; does not handle split pots)
   const winnerInState = s.players.find((p) => p.id === bestPlayer.id)!;
+  const potAmount = s.pot;
   winnerInState.chips += s.pot;
   s.pot = 0;
   s.winner = winnerInState.name;
   s.winnerHand = bestHand.description;
   s.roundOver = true;
 
+  // Emit events for extended state
+  if (extSource) {
+    let ext: ExtendedGameState = {
+      ...s,
+      character: { ...extSource.character },
+      roundNumber: extSource.roundNumber,
+      events: [...extSource.events],
+      gameOver: extSource.gameOver,
+      gameOverReason: extSource.gameOverReason,
+    };
+
+    ext = emitEvent(ext, 'SHOWDOWN', {
+      contenders: contenders.map((p) => ({
+        playerId: p.id,
+        hand: p.hand,
+      })),
+      communityCards: s.communityCards,
+    });
+
+    ext = emitEvent(ext, 'HAND_RESULT', {
+      winnerId: winnerInState.id,
+      winnerName: winnerInState.name,
+      handRank: bestHand.rank,
+      handDescription: bestHand.description,
+      reason: 'showdown',
+    });
+
+    ext = emitEvent(ext, 'POT_AWARDED', {
+      winnerId: winnerInState.id,
+      amount: potAmount,
+    });
+
+    return ext;
+  }
+
   return s;
+}
+
+// ── Strip Mechanic ───────────────────────────────────────────────────
+
+/**
+ * After a round ends, checks if the NPC (opponent) lost and should
+ * strip a layer. Emits STRIP_TRIGGER and LAYER_CHANGE events.
+ *
+ * Call this after the round is complete (state.roundOver === true).
+ * Only operates on ExtendedGameState; returns unchanged state otherwise.
+ */
+export function processStripTrigger(state: ExtendedGameState): ExtendedGameState {
+  if (!state.roundOver) return state;
+
+  let ext = cloneExtendedState(state);
+  const playerWon = state.winner === state.players[0].name;
+  const npcWon = state.winner === state.players[1].name;
+
+  if (playerWon) {
+    // NPC lost this hand — update character stats
+    ext.character.handsLost += 1;
+
+    // Trigger strip: advance to next layer
+    if (ext.character.currentLayer < ext.character.totalLayers) {
+      const prevLayer = ext.character.currentLayer;
+      ext.character.currentLayer += 1;
+
+      ext = emitEvent(ext, 'STRIP_TRIGGER', {
+        characterId: ext.character.id,
+        reason: 'hand_lost',
+        fromLayer: prevLayer,
+        toLayer: ext.character.currentLayer,
+      });
+
+      ext = emitEvent(ext, 'LAYER_CHANGE', {
+        characterId: ext.character.id,
+        layer: ext.character.currentLayer,
+        totalLayers: ext.character.totalLayers,
+      });
+    }
+  } else if (npcWon) {
+    ext.character.handsWon += 1;
+  }
+
+  return ext;
+}
+
+/**
+ * Checks all game-over conditions and updates the state accordingly.
+ * Emits GAME_OVER event when a terminal condition is reached.
+ *
+ * Game-over conditions:
+ * - Player is broke (chips <= 0)
+ * - Opponent is broke (chips <= 0)
+ * - Opponent is fully stripped (currentLayer >= totalLayers)
+ */
+export function checkGameOver(state: ExtendedGameState): ExtendedGameState {
+  if (state.gameOver) return state;
+
+  let ext = cloneExtendedState(state);
+
+  const playerChips = ext.players[0].chips;
+  const opponentChips = ext.players[1].chips;
+  const fullyStripped = ext.character.currentLayer >= ext.character.totalLayers;
+
+  if (playerChips <= 0) {
+    ext.gameOver = true;
+    ext.gameOverReason = 'player_broke';
+    ext = emitEvent(ext, 'GAME_OVER', {
+      reason: 'player_broke',
+      message: 'You ran out of chips!',
+    });
+  } else if (opponentChips <= 0) {
+    ext.gameOver = true;
+    ext.gameOverReason = 'opponent_broke';
+    ext = emitEvent(ext, 'GAME_OVER', {
+      reason: 'opponent_broke',
+      message: `${ext.character.displayName} ran out of chips!`,
+    });
+  } else if (fullyStripped) {
+    ext.gameOver = true;
+    ext.gameOverReason = 'opponent_stripped';
+    ext = emitEvent(ext, 'GAME_OVER', {
+      reason: 'opponent_stripped',
+      characterId: ext.character.id,
+      message: `${ext.character.displayName} has nothing left to wager!`,
+    });
+  }
+
+  return ext;
 }

@@ -1,10 +1,25 @@
 import type { Metadata } from "next";
+import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { SettingsProvider } from "@/context/SettingsContext";
+import AgeGate from "@/components/ui/AgeGate";
+
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  variable: "--font-playfair-display",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Texas Hold'em Poker",
-  description: "Play Texas Hold'em Poker against an AI opponent",
+  title: "Strip Poker VIP",
+  description: "An exclusive luxury poker experience",
 };
 
 export default function RootLayout({
@@ -13,15 +28,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${playfairDisplay.variable} ${inter.variable}`}>
       <body className="min-h-screen antialiased">
-        <SettingsProvider>{children}</SettingsProvider>
+        <SettingsProvider>
+          <AgeGate />
+          {children}
+        </SettingsProvider>
       </body>
     </html>
   );

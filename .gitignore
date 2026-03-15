@@ -34,3 +34,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local-only files
+.a5c/
+.env
+.mcp.json
+.playwright-mcp/
+StripPokerVIP/
+cross-platform-guide.jsx
+/docs/
+/game/
+godot-mcp/
+poker-game-blueprint.jsx
+poker-visual-bible.jsx
+/tools/

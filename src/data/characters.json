@@ -1,0 +1,89 @@
+{
+  "characters": [
+    {
+      "id": "luna",
+      "displayName": "Luna",
+      "personality": "tease",
+      "description": "Redheaded temptress who loves to bluff",
+      "heroImage": "/characters/luna/hero.jpg",
+      "layers": [
+        "/characters/luna/layer1.jpg",
+        "/characters/luna/layer2.jpg",
+        "/characters/luna/layer3.jpg",
+        "/characters/luna/layer4.jpg",
+        "/characters/luna/layer5.jpg",
+        "/characters/luna/layer6.jpg"
+      ],
+      "difficulty": "medium",
+      "unlocked": true
+    },
+    {
+      "id": "sakura",
+      "displayName": "Sakura",
+      "personality": "shy",
+      "description": "Gentle Japanese beauty with a hidden competitive streak",
+      "heroImage": "/characters/sakura/hero.jpg",
+      "layers": [
+        "/characters/sakura/layer1.jpg",
+        "/characters/sakura/layer2.jpg",
+        "/characters/sakura/layer3.jpg",
+        "/characters/sakura/layer4.jpg",
+        "/characters/sakura/layer5.jpg",
+        "/characters/sakura/layer6.jpg"
+      ],
+      "difficulty": "easy",
+      "unlocked": false
+    },
+    {
+      "id": "valentina",
+      "displayName": "Valentina",
+      "personality": "cocky",
+      "description": "Bold Latina powerhouse who never backs down",
+      "heroImage": "/characters/valentina/hero.jpg",
+      "layers": [
+        "/characters/valentina/layer1.jpg",
+        "/characters/valentina/layer2.jpg",
+        "/characters/valentina/layer3.jpg",
+        "/characters/valentina/layer4.jpg",
+        "/characters/valentina/layer5.jpg",
+        "/characters/valentina/layer6.jpg"
+      ],
+      "difficulty": "hard",
+      "unlocked": false
+    },
+    {
+      "id": "emma",
+      "displayName": "Emma",
+      "personality": "tease",
+      "description": "Playful blonde with a killer poker face",
+      "heroImage": "/characters/emma/hero.jpg",
+      "layers": [
+        "/characters/emma/layer1.jpg",
+        "/characters/emma/layer2.jpg",
+        "/characters/emma/layer3.jpg",
+        "/characters/emma/layer4.jpg",
+        "/characters/emma/layer5.jpg",
+        "/characters/emma/layer6.jpg"
+      ],
+      "difficulty": "medium",
+      "unlocked": true
+    },
+    {
+      "id": "zara",
+      "displayName": "Zara",
+      "personality": "cocky",
+      "description": "Fierce and dominant, she owns the table",
+      "heroImage": "/characters/zara/hero.jpg",
+      "layers": [
+        "/characters/zara/layer1.jpg",
+        "/characters/zara/layer2.jpg",
+        "/characters/zara/layer3.jpg",
+        "/characters/zara/layer4.jpg",
+        "/characters/zara/layer5.jpg",
+        "/characters/zara/layer6.jpg"
+      ],
+      "difficulty": "hard",
+      "unlocked": false
+    }
+  ]
+}
