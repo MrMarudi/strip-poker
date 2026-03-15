@@ -3,3 +3,4 @@ export { default as HandRankReveal } from './HandRankReveal';
 export { default as ChipRainEffect } from './ChipRainEffect';
 export { default as TableSpotlight } from './TableSpotlight';
 export { default as CelebrationLayer } from './CelebrationLayer';
+export { default as GirlWinReveal } from './GirlWinReveal';

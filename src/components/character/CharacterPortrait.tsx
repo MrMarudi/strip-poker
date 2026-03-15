@@ -14,8 +14,8 @@ export interface CharacterPortraitProps {
 }
 
 const SIZE_MAP = {
-  xs: { width: 56, height: 72 },
-  sm: { width: 100, height: 130 },
+  xs: { width: 80, height: 106 },
+  sm: { width: 120, height: 160 },
   md: { width: 200, height: 280 },
   lg: { width: 300, height: 420 },
 } as const;

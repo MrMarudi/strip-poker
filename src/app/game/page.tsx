@@ -42,7 +42,7 @@ import {
   ThinkingOverlay,
 } from '@/components/character';
 import { GameStatusBar, PhaseIndicator, ActionBar } from '@/components/hud';
-import { CelebrationLayer } from '@/components/effects';
+import { CelebrationLayer, GirlWinReveal } from '@/components/effects';
 
 // ── Character data ──────────────────────────────────────────────────
 import charactersJson from '@/data/characters.json';
@@ -100,6 +100,8 @@ export default function GamePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [showGirlReveal, setShowGirlReveal] = useState(false);
+  const [revealHandRank, setRevealHandRank] = useState<string | undefined>(undefined);
   const npcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const actedThisStreetRef = useRef<Set<number>>(new Set());
@@ -339,6 +341,12 @@ export default function GamePage() {
                 ? 'medium'
                 : 'small';
         celebrate(level as 'small' | 'medium' | 'large' | 'jackpot', rank);
+
+        // Show girl reveal animation after a short delay
+        await wait(800);
+        if (!mountedRef.current) return;
+        setRevealHandRank(rank || undefined);
+        setShowGirlReveal(true);
       }
 
       // 5. NPC dialogue on win/loss
@@ -599,6 +607,7 @@ export default function GamePage() {
     if (!gameState) return;
     setIsProcessing(true);
     dismissDialogue();
+    setShowGirlReveal(false);
 
     // Cleanup card animations
     await cleanupCards();
@@ -847,6 +856,14 @@ export default function GamePage() {
       <CelebrationLayer
         intensity={celebrationIntensity}
         handRank={celebrationHandRank ?? undefined}
+      />
+      <GirlWinReveal
+        active={showGirlReveal}
+        characterId={characterData.id}
+        currentLayer={currentLayer}
+        displayName={characterData.displayName}
+        handRank={revealHandRank}
+        onDismiss={() => setShowGirlReveal(false)}
       />
     </main>
   );
